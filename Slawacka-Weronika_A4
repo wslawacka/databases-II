@@ -1,0 +1,41 @@
+// 1. Print out all laws sponsored by republicans from California, who are over 65 years old.
+MATCH (b:Bill)-[:SPONSORED_BY]->(l:Legislator) 
+WHERE l.state="CA" AND l.currentParty="Republican" AND duration.between(date(l.birthday), date()).years > 65 
+RETURN b.officialTitle
+
+// 2. Count for how many laws Robert Aderholt voted positively.
+MATCH (b:Bill)<-[v:VOTED_ON]-(:Legislator {firstName: "Robert", lastName: "Aderholt"})
+WHERE v.vote IN ["Aye", "Yea"]
+RETURN count(b) AS positive_votes
+
+// 3. How many laws were proposed at the 114th Congress, and how many of these are currently active?
+MATCH (b:Bill)-[:PROPOSED_DURING]->(:Congress {number: "114"})
+RETURN 
+	count(b) AS laws_proposed, 
+	sum(CASE WHEN b.active="True" THEN 1 END) AS currently_active
+
+// 4. Print out all the states that hold the majority of democrats in the congress.
+MATCH (s:State)<-[:REPRESENTS]-(l:Legislator)
+WITH s.code AS state,
+     count(l) AS total_legislators,
+     count(CASE WHEN l.currentParty = "Democrat" THEN 1 END) AS democrat_count
+WHERE democrat_count > total_legislators / 2
+RETURN state
+
+// 5. Retrieve all representatives of the state of Ohio, elected in both bodies of the congress, and their affiliation to the party.
+MATCH (p:Party)<-[:IS_MEMBER_OF]-(l:Legislator {state: "OH"})-[:ELECTED_TO]->(b:Body)
+WITH p, l, COLLECT(DISTINCT b.type) AS bodies
+WHERE SIZE(bodies)=2
+RETURN l.firstName, l.lastName, p.name
+
+// 6. Which federal state (or federal states, if there is more than one) has the members of the congress in the maximum number of different committees?
+MATCH (s:State)<-[:REPRESENTS]-(l:Legislator)-[:SERVES_ON]->(c:Committee)
+WITH s.code AS state, COUNT(DISTINCT c) AS committee_count
+WITH state, committee_count
+ORDER BY committee_count DESC
+WITH collect([state, committee_count]) AS results
+WITH results, results[0][1] AS max_count
+UNWIND results AS row
+WITH row[0] AS state, row[1] AS committee_count, max_count
+WHERE committee_count = max_count
+RETURN state, committee_count
